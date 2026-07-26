@@ -1,0 +1,11 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic==2.11.3
+pydantic-settings==2.9.1
+python-multipart==0.0.20
+# 翻译模型（Helsinki-NLP/opus-mt-en-zh）
+transformers>=4.48.0
+torch>=2.5.0
+sentencepiece>=0.2.0
+# Embedding 模型（all-MiniLM-L6-v2）
+sentence-transformers>=3.4.0
