@@ -77,6 +77,7 @@ async def list_papers(
             page_count=p.page_count,
             folder_id=p.folder_id,
             status=p.status,
+            has_translation=bool(p.translated_pdf_path and os.path.exists(p.translated_pdf_path)),
             created_at=p.created_at,
         ).model_dump()
         for p in papers
@@ -208,6 +209,7 @@ async def get_paper(paper: Paper = Depends(get_paper_or_404)):
             page_count=paper.page_count,
             folder_id=paper.folder_id,
             status=paper.status,
+            has_translation=bool(paper.translated_pdf_path and os.path.exists(paper.translated_pdf_path)),
             created_at=paper.created_at,
         ).model_dump()
     )

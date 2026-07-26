@@ -43,18 +43,6 @@ async def list_folders(db: AsyncSession = Depends(get_db)):
             )
         )
 
-    # 前置一个虚拟的 "全部论文"
-    total_count_result = await db.execute(select(func.count(Paper.id)))
-    total_papers = total_count_result.scalar() or 0
-
-    virtual_all = FolderResponse(
-        id=0,
-        name="全部论文",
-        is_default=True,
-        paper_count=total_papers,
-    )
-    items.insert(0, virtual_all)
-
     return success([item.model_dump() for item in items])
 
 

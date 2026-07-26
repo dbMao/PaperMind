@@ -30,6 +30,7 @@ class PaperResponse(BaseModel):
     page_count: int | None = None
     folder_id: int | None = None
     status: str = "indexed"
+    has_translation: bool = False
     created_at: datetime | None = None
 
     class Config:

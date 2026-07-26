@@ -8,7 +8,7 @@ export const usePapersStore = defineStore('papers', () => {
 
   const selectedPaperId = ref(null)
   const searchQuery = ref('')
-  const currentFolderId = ref(0)
+  const currentFolderId = ref(null)
   const isSearching = ref(false)
 
   const selectedPaper = computed(() =>
@@ -32,8 +32,8 @@ export const usePapersStore = defineStore('papers', () => {
   async function fetchPapers() {
     isSearching.value = true
     try {
-      const params = { page: 1, page_size: 200 }
-      if (currentFolderId.value !== 0) params.folder_id = currentFolderId.value
+      const params = { page: 1, page_size: 100 }
+      if (currentFolderId.value != null) params.folder_id = currentFolderId.value
       if (searchQuery.value.trim()) params.search = searchQuery.value.trim()
 
       const res = await apiClient.get('/papers', { params })
@@ -45,6 +45,7 @@ export const usePapersStore = defineStore('papers', () => {
           year: p.year,
           folderId: p.folder_id,
           abstract: p.abstract,
+          hasTranslation: p.has_translation || false,
           createdAt: p.created_at,
         }))
       }

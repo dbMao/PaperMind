@@ -3,15 +3,21 @@
     <div class="viewer-toolbar">
       <span class="toolbar-title" :title="paper.title">{{ paper.title }}</span>
       <div class="toolbar-actions">
-        <!-- 版本切换 -->
         <template v-if="hasTranslation">
           <button class="btn btn-sm" :class="showTranslated ? 'btn-primary' : 'btn-secondary'" @click="showTranslated = true">译文</button>
           <button class="btn btn-sm" :class="!showTranslated ? 'btn-primary' : 'btn-secondary'" @click="showTranslated = false">原文</button>
           <a :href="`/api/papers/${paper.id}/translated`" download class="btn btn-sm btn-secondary">⬇</a>
         </template>
-        <button v-else class="btn btn-secondary btn-sm" :disabled="translating" @click="requestTranslation">
-          🌐 {{ translating ? '翻译中...' : '翻译' }}
-        </button>
+        <div v-else class="translate-menu-wrap" ref="translateMenuRef">
+          <button class="btn btn-secondary btn-sm" :disabled="translating" @click="showTranslateMenu = !showTranslateMenu">
+            🌐 {{ translating ? '翻译中...' : '翻译' }}
+          </button>
+          <div v-if="showTranslateMenu" class="translate-dropdown">
+            <button @click="requestTranslation('openai')">🤖 大模型翻译（更准确，需 API）</button>
+            <button @click="requestTranslation('google')">🔤 Google 翻译（免费，需 VPN）</button>
+            <button @click="requestTranslation('bing')">🔤 Bing 翻译（免费，需 VPN）</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -60,6 +66,8 @@ const translateProgress = ref(0)
 const translateMsg = ref('')
 const hasTranslation = ref(false)
 const showTranslated = ref(false)
+const showTranslateMenu = ref(false)
+const translateMenuRef = ref(null)
 
 const pdfSrc = computed(() => {
   if (!paper.value) return ''
@@ -82,18 +90,20 @@ watch(() => paper.value?.id, async (pid) => {
   } catch { /* ignore */ }
 }, { immediate: true })
 
-async function requestTranslation() {
+async function requestTranslation(service = 'openai') {
   if (!paper.value) return
+  showTranslateMenu.value = false
   translating.value = true
   translateProgress.value = 10
-  translateMsg.value = 'pdf2zh 保留排版翻译中，大约需要 1-5 分钟...'
+  const labels = { openai: '大模型翻译', google: 'Google 翻译', bing: 'Bing 翻译' }
+  translateMsg.value = `pdf2zh ${labels[service] || ''} 中，大约需要 1-5 分钟...`
 
   const timer = setInterval(() => {
     if (translateProgress.value < 85) translateProgress.value += 3
   }, 3000)
 
   try {
-    const res = await apiClient.post(`/papers/${paper.value.id}/translate`, {}, { timeout: 600000 })
+    const res = await apiClient.post(`/papers/${paper.value.id}/translate`, { service }, { timeout: 600000 })
     clearInterval(timer)
     if (res.code === 0) {
       hasTranslation.value = true
@@ -105,11 +115,17 @@ async function requestTranslation() {
     }
   } catch (e) {
     clearInterval(timer)
-    translateMsg.value = '翻译失败：请确认已安装 pdf2zh 并配置了 LLM API'
+    translateMsg.value = '翻译失败：' + (service === 'openai' ? '请确认已配置 LLM API' : '请检查网络连接（需 VPN）')
     console.error(e)
   }
 
   setTimeout(() => { translating.value = false }, 2500)
+}
+
+function onClickOutside(e) {
+  if (translateMenuRef.value && !translateMenuRef.value.contains(e.target)) {
+    showTranslateMenu.value = false
+  }
 }
 
 const selectionMenu = reactive({ visible: false, x: 0, y: 0, text: '' })
@@ -125,8 +141,21 @@ function askSelection() {
   window.dispatchEvent(new CustomEvent('paper-selection-ask', { detail: { text: selectionMenu.text } }))
   selectionMenu.visible = false; window.getSelection()?.removeAllRanges()
 }
-onMounted(() => { document.addEventListener('mouseup', onMouseUp) })
-onUnmounted(() => { document.removeEventListener('mouseup', onMouseUp) })
+function onShowTranslation(e) {
+  if (e.detail?.paperId === paper.value?.id) {
+    showTranslated.value = true
+  }
+}
+onMounted(() => {
+  document.addEventListener('mouseup', onMouseUp)
+  document.addEventListener('click', onClickOutside)
+  window.addEventListener('show-translation', onShowTranslation)
+})
+onUnmounted(() => {
+  document.removeEventListener('mouseup', onMouseUp)
+  document.removeEventListener('click', onClickOutside)
+  window.removeEventListener('show-translation', onShowTranslation)
+})
 </script>
 
 <style scoped>
@@ -134,8 +163,23 @@ onUnmounted(() => { document.removeEventListener('mouseup', onMouseUp) })
 .viewer-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; flex-shrink: 0; border-bottom: 1px solid var(--color-border); gap: 12px; }
 .toolbar-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .toolbar-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+
+.translate-menu-wrap { position: relative; }
+.translate-dropdown {
+  position: absolute; right: 0; top: 100%; z-index: 20;
+  background: var(--color-bg-primary); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  padding: 4px; min-width: 220px; margin-top: 4px;
+}
+.translate-dropdown button {
+  display: block; width: 100%; padding: 6px 10px; border-radius: var(--radius-sm);
+  background: transparent; color: var(--color-text-primary); font-size: 13px;
+  text-align: left; cursor: pointer; border: none;
+}
+.translate-dropdown button:hover { background: var(--color-bg-hover); }
 .paper-body { flex: 1; overflow: hidden; }
-.pdf-iframe { width: 100%; height: 100%; border: none; }
+.pdf-iframe { width: 100%; height: 100%; border: none; background: var(--color-bg-primary); }
+.dark .pdf-iframe { filter: invert(0.88) hue-rotate(180deg); }
 .viewer-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--color-text-muted); font-size: 15px; }
 
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 999; }

@@ -35,36 +35,42 @@
             <path v-else d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v1H4v10z"/>
           </svg>
           <span class="folder-name">{{ f.name }}</span>
-          <span class="folder-count">{{ f.paperCount }}</span>
-          <button v-if="!f.isDefault" class="btn-ghost btn-sm folder-add" @click.stop="openUploadTo(f)" title="导入论文">+</button>
-          <template v-if="!f.isDefault">
-            <button class="btn-ghost btn-sm folder-edit" @click.stop="startRename(f)" title="重命名">✎</button>
-            <button class="btn-ghost btn-sm folder-del" @click.stop="handleDeleteFolder(f)" title="删除">✕</button>
-          </template>
+          <button class="btn-ghost btn-sm folder-add" @click.stop="openUploadTo(f)" title="导入论文">+</button>
+          <button class="btn-ghost btn-sm folder-edit" @click.stop="startRename(f)" title="重命名">✎</button>
+          <button class="btn-ghost btn-sm folder-del" @click.stop="handleDeleteFolder(f)" title="删除">✕</button>
         </div>
 
         <!-- 展开后显示该组别内的论文 -->
         <template v-if="expandedFolders.has(f.id)">
           <div v-if="folderPapers(f.id).length === 0" class="empty-hint" style="padding:8px 16px 8px 36px">暂无论文</div>
-          <div
-            v-for="paper in folderPapers(f.id)"
-            :key="paper.id"
-            class="paper-item"
-            :class="{ active: papers.selectedPaperId === paper.id }"
-            @click="papers.selectPaper(paper.id)"
-          >
-            <div class="paper-item-main">
-              <span class="paper-title">{{ paper.title }}</span>
-              <span class="paper-meta">{{ (paper.authors[0] || '') }} · {{ paper.year || '' }}</span>
-            </div>
-            <div class="paper-menu-wrap" @click.stop>
-              <button class="btn-ghost btn-sm paper-more" @click="togglePaperMenu(paper.id)">···</button>
-              <div v-if="paperMenuId === paper.id" class="paper-dropdown">
-                <button @click="movePaper(paper)">📁 移动</button>
-                <button @click="deletePaper(paper)">🗑 删除</button>
+          <template v-for="paper in folderPapers(f.id)" :key="paper.id">
+            <div
+              class="paper-item"
+              :class="{ active: papers.selectedPaperId === paper.id }"
+              @click="papers.selectPaper(paper.id)"
+            >
+              <div class="paper-item-main">
+                <span class="paper-title">{{ paper.title }}</span>
+                <span class="paper-meta">{{ (paper.authors[0] || '') }} · {{ paper.year || '' }}</span>
+              </div>
+              <div class="paper-menu-wrap" @click.stop>
+                <button class="btn-ghost btn-sm paper-more" @click="togglePaperMenu(paper.id)">···</button>
+                <div v-if="paperMenuId === paper.id" class="paper-dropdown">
+                  <button @click="movePaper(paper)">📁 移动</button>
+                  <button @click="deletePaper(paper)">🗑 删除</button>
+                </div>
               </div>
             </div>
-          </div>
+            <div
+              v-if="paper.hasTranslation"
+              class="paper-item translation-item"
+              @click="openTranslated(paper.id)"
+            >
+              <div class="paper-item-main">
+                <span class="paper-title">📄 译文</span>
+              </div>
+            </div>
+          </template>
         </template>
       </div>
 
@@ -102,7 +108,7 @@ const papers = usePapersStore()
 const emit = defineEmits(['collapse', 'open-upload'])
 
 // 展开的组别
-const expandedFolders = ref(new Set([0])) // 默认展开"全部论文"
+const expandedFolders = ref(new Set())
 
 function toggleFolder(f) {
   const s = new Set(expandedFolders.value)
@@ -116,15 +122,18 @@ function toggleFolder(f) {
 }
 
 function folderPapers(folderId) {
-  return papers.papers.filter(p => {
-    if (folderId === 0) return true
-    return p.folderId === folderId
-  })
+  return papers.papers.filter(p => p.folderId === folderId)
 }
 
 function openUploadTo(folder) {
   papers.setFolder(folder.id)
   emit('open-upload')
+}
+
+function openTranslated(paperId) {
+  papers.selectPaper(paperId)
+  // 通知 PaperViewer 切换到译文
+  window.dispatchEvent(new CustomEvent('show-translation', { detail: { paperId } }))
 }
 
 // 论文三点菜单
@@ -208,6 +217,7 @@ function cancelRename() { renamingId.value = null }
 <style scoped>
 .paper-library {
   display: flex; flex-direction: column; height: 100%;
+  max-width: 380px;
   background: var(--color-bg-sidebar); border-right: 1px solid var(--color-border);
   overflow: hidden;
 }
@@ -248,9 +258,9 @@ function cancelRename() { renamingId.value = null }
   color: var(--color-text-secondary); transition: all var(--transition);
 }
 .folder-item:hover { background: var(--color-bg-hover); }
-.folder-item.active { background: var(--color-accent-light); color: var(--color-accent); }
+.folder-item.active { background: var(--color-accent); color: #fff; }
+.dark .folder-item.active { background: #444; color: #e8e8e8; }
 .folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.folder-count { font-size: 11px; color: var(--color-text-muted); }
 .folder-add, .folder-edit, .folder-del { display: none; flex-shrink: 0; padding: 2px 4px; font-size: 11px; }
 .folder-item:hover .folder-add,
 .folder-item:hover .folder-edit,
@@ -274,6 +284,10 @@ function cancelRename() { renamingId.value = null }
 .paper-menu-wrap { position: relative; flex-shrink: 0; }
 .paper-more { opacity: 0; font-size: 16px; letter-spacing: 2px; padding: 2px 4px; }
 .paper-item:hover .paper-more { opacity: 1; }
+
+.translation-item { padding-left: 48px; font-size: 12px; opacity: 0.85; border-left: none; background: var(--color-bg-secondary); }
+.dark .translation-item { background: rgba(255,255,255,0.03); }
+.translation-item:hover { opacity: 1; background: var(--color-bg-hover); }
 .paper-dropdown {
   position: absolute; right: 0; top: 100%; z-index: 20;
   background: var(--color-bg-primary); border: 1px solid var(--color-border);

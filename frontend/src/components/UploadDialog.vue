@@ -45,7 +45,7 @@
             <span>启用 AI 增强语义解析</span>
           </label>
           <p v-if="enableAI" class="ai-warning">
-            ⚠️ 此选项将调用大模型 API 进行语义分割，会消耗额外的 tokens。建议仅对重要论文使用。
+            ⚠️ 此选项将调用大模型 API 进行语义分割，会消耗额外的 tokens。建议仅对需要解析公式、图标的重要论文使用。
           </p>
         </div>
 

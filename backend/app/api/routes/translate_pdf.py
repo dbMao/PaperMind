@@ -26,9 +26,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/papers", tags=["Translation"])
 
 
+from pydantic import BaseModel
+
+class TranslateRequest(BaseModel):
+    service: str = "openai"  # openai / google / bing
+
+
 @router.post("/{paper_id}/translate")
 async def translate_paper(
     paper_id: int,
+    req: TranslateRequest = TranslateRequest(),
     db: AsyncSession = Depends(get_db),
 ):
     """调用 pdf2zh 生成翻译版 PDF"""
@@ -37,22 +44,32 @@ async def translate_paper(
     if not paper.file_path or not os.path.exists(paper.file_path):
         return error(40402, "论文 PDF 文件不存在，请重新上传")
 
-    result = await db.execute(select(LLMSettings).where(LLMSettings.id == 1))
-    llm = result.scalar_one_or_none()
-    if not llm or not llm.api_key:
-        return error(40005, "请先在设置页配置大模型 API")
+    # LLM 服务需要 API key
+    api_key = ""
+    base_url = "https://api.deepseek.com/v1"
+    model = "deepseek-chat"
 
-    logger.info(f"pdf2zh 翻译开始: paper #{paper_id}")
+    if req.service == "openai":
+        result = await db.execute(select(LLMSettings).where(LLMSettings.id == 1))
+        llm = result.scalar_one_or_none()
+        if not llm or not llm.api_key:
+            return error(40005, "使用大模型翻译请先在设置页配置 API")
+        api_key = llm.api_key
+        base_url = llm.base_url or base_url
+        model = llm.model or model
+
+    logger.info(f"pdf2zh 翻译开始: paper #{paper_id}, service={req.service}")
 
     loop = asyncio.get_running_loop()
     resp = await loop.run_in_executor(
         None,
         retain_pdf_client.translate_pdf,
         paper.file_path,
-        llm.api_key,
-        llm.base_url or "https://api.deepseek.com/v1",
-        llm.model or "deepseek-chat",
+        api_key,
+        base_url,
+        model,
         "zh",
+        req.service,
     )
 
     if resp["success"] and resp["pdf_path"]:

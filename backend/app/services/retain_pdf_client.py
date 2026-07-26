@@ -27,10 +27,11 @@ class RetainPDFClient:
     def translate_pdf(
         self,
         pdf_path: str,
-        api_key: str,
+        api_key: str = "",
         base_url: str = "https://api.deepseek.com/v1",
         model: str = "deepseek-chat",
         lang_out: str = "zh",
+        service: str = "openai",
     ) -> dict:
         """
         使用 pdf2zh 翻译 PDF 文件，保留排版。
@@ -68,9 +69,10 @@ class RetainPDFClient:
                 output=output_dir,
                 lang_in="en",
                 lang_out=lang_out,
-                service="openai",
-                thread=16,       # 高并发，大幅加速
+                service=service,
+                thread=4,
                 model=doc_model,
+                skip_subset_fonts=True,   # 跳过字体子集化，防止黑线渲染问题
                 ignore_cache=False,
             )
 
@@ -83,9 +85,10 @@ class RetainPDFClient:
 
             # 查找输出文件（pdf2zh 输出为 <name>-mono.pdf 或 <name>-dual.pdf）
             base = os.path.splitext(os.path.basename(pdf_path))[0]
+            # 优先取 dual（双语对照，无叠层黑线），其次 mono（纯译文）
             candidates = [
-                os.path.join(output_dir, f"{base}-mono.pdf"),
                 os.path.join(output_dir, f"{base}-dual.pdf"),
+                os.path.join(output_dir, f"{base}-mono.pdf"),
             ]
             out_path = None
             for c in candidates:

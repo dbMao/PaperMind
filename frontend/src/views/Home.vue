@@ -146,6 +146,7 @@ function stopResize() {
   flex: 1;
   overflow: hidden;
   min-width: 0;
+  background: var(--color-bg-primary);
 }
 
 /* 状态二：论文 + 对话 */
