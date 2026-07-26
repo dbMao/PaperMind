@@ -3,9 +3,9 @@ import axios from 'axios'
 const apiClient = axios.create({
   baseURL: '/api',
   timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // 不设默认 Content-Type，axios 会根据数据类型自动设置：
+  //   object/JSON → application/json
+  //   FormData    → multipart/form-data（自动带 boundary）
 })
 
 // 请求拦截器

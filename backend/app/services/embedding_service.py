@@ -40,8 +40,9 @@ class EmbeddingService:
         return False
 
     def deploy(self) -> dict:
-        """下载模型到本地。"""
-        if self.is_deployed:
+        """下载模型到本地目录（如果已在 HF 缓存中则直接复制）。"""
+        # 如果本地目录已有模型文件，直接返回
+        if MODEL_DIR.exists() and any(MODEL_DIR.iterdir()):
             return {"status": "deployed", "message": "模型已部署"}
 
         try:

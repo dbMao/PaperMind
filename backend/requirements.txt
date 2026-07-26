@@ -3,9 +3,32 @@ uvicorn[standard]==0.34.2
 pydantic==2.11.3
 pydantic-settings==2.9.1
 python-multipart==0.0.20
-# 翻译模型（Helsinki-NLP/opus-mt-en-zh）
-transformers>=4.48.0
-torch>=2.5.0
-sentencepiece>=0.2.0
-# Embedding 模型（all-MiniLM-L6-v2）
+
+# 数据库
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+
+# Embedding 模型（all-MiniLM-L6-v2，~90MB）
 sentence-transformers>=3.4.0
+
+# LangChain
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-chroma>=0.2.0
+langchain-huggingface>=0.1.0
+langchain-core>=0.3.0
+tiktoken>=0.7.0
+
+# PDF 解析
+PyMuPDF>=1.24.0
+pdfplumber>=0.10.0
+pillow>=10.0.0
+
+# ChromaDB
+chromadb>=0.5.0
+
+# SSE 流式
+sse-starlette>=2.0.0
+
+# PDF 保留排版翻译（EN → ZH）
+pdf2zh>=1.9.0

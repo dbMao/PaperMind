@@ -1,3 +1,4 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings
 
 
@@ -12,11 +13,33 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
-    # 翻译模型目录
-    TRANSLATION_MODEL_DIR: str = "./models/opus-mt-en-zh"
+    # 数据存储目录
+    DATA_DIR: str = "./data"
+
+    # SQLite 数据库路径
+    DATABASE_URL: str = ""
+
+    # ChromaDB 持久化目录
+    CHROMA_PERSIST_DIR: str = "./chroma_db"
 
     # Embedding 模型目录
     EMBEDDING_MODEL_DIR: str = "./models/all-MiniLM-L6-v2"
+
+    @property
+    def db_url(self) -> str:
+        """计算数据库连接 URL"""
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        db_dir = Path(self.DATA_DIR)
+        db_dir.mkdir(parents=True, exist_ok=True)
+        return f"sqlite+aiosqlite:///{db_dir / 'papermind.db'}"
+
+    @property
+    def pdf_storage_dir(self) -> Path:
+        """PDF 文件存储目录"""
+        p = Path(self.DATA_DIR) / "pdfs"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
 
     class Config:
         env_file = ".env"

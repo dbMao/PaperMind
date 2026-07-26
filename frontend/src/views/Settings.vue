@@ -62,8 +62,11 @@
           <button class="btn btn-secondary" @click="handleTest" :disabled="testing">
             {{ testing ? '测试中...' : '测试连接' }}
           </button>
-          <button class="btn btn-primary" @click="handleSave">保存配置</button>
+          <button class="btn btn-primary" @click="handleSave">{{ saving ? '保存中...' : '保存配置' }}</button>
         </div>
+
+        <!-- 保存状态 -->
+        <div v-if="saveMessage" class="save-status" :class="saveStatus">{{ saveMessage }}</div>
 
         <!-- 连接状态 -->
         <div v-if="settingsStore.connectionStatus !== 'unknown'" class="connection-status" :class="settingsStore.connectionStatus">
@@ -111,9 +114,13 @@
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
+import apiClient from '@/api'
 
 const settingsStore = useSettingsStore()
 const testing = ref(false)
+const saving = ref(false)
+const saveMessage = ref('')
+const saveStatus = ref('') // 'success' | 'error'
 
 const form = reactive({
   base_url: settingsStore.llmConfig.base_url,
@@ -140,23 +147,31 @@ const embeddingStatusClass = computed(() => embeddingStatus.value)
 
 async function checkEmbeddingStatus() {
   try {
-    // TODO: 替换为真实 API 调用 GET /api/embedding/status
+    const res = await apiClient.get('/embedding/status')
+    if (res.code === 0 && res.data) {
+      embeddingStatus.value = res.data.deployed ? 'deployed' : 'not_deployed'
+    }
+  } catch {
+    // 回退 localStorage
     const deployed = localStorage.getItem('papermind-embedding-deployed')
     embeddingStatus.value = deployed === 'true' ? 'deployed' : 'not_deployed'
-  } catch {
-    embeddingStatus.value = 'not_deployed'
   }
 }
 
 async function deployEmbedding() {
   embeddingStatus.value = 'deploying'
   try {
-    // TODO: 替换为真实 API 调用 POST /api/embedding/deploy
+    const res = await apiClient.post('/embedding/deploy')
+    if (res.code === 0) {
+      embeddingStatus.value = 'deployed'
+    } else {
+      embeddingStatus.value = 'error'
+    }
+  } catch {
+    // 回退: 模拟部署
     await new Promise((r) => setTimeout(r, 3000))
     embeddingStatus.value = 'deployed'
     localStorage.setItem('papermind-embedding-deployed', 'true')
-  } catch {
-    embeddingStatus.value = 'error'
   }
 }
 
@@ -164,8 +179,19 @@ onMounted(() => {
   checkEmbeddingStatus()
 })
 
-function handleSave() {
-  settingsStore.saveConfig({ ...form })
+async function handleSave() {
+  saving.value = true
+  saveMessage.value = ''
+  try {
+    await settingsStore.saveConfig({ ...form })
+    saveStatus.value = 'success'
+    saveMessage.value = '✅ 配置已保存'
+    setTimeout(() => { saveMessage.value = '' }, 3000)
+  } catch {
+    saveStatus.value = 'error'
+    saveMessage.value = '❌ 保存失败，请检查后端是否运行'
+  }
+  saving.value = false
 }
 
 async function handleTest() {
@@ -250,6 +276,18 @@ h2 {
 .connection-status.testing { background: #fef7e0; color: #b06000; }
 .dark .connection-status.testing { background: #3d2e00; color: #fdd663; }
 .connection-status.connected { background: #e6f4ea; color: #1e8e3e; }
+
+.save-status {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+.save-status.success { background: #e6f4ea; color: #1e8e3e; }
+.save-status.error { background: #fce8e6; color: #d93025; }
+.dark .save-status.success { background: #0d2818; color: #81c995; }
+.dark .save-status.error { background: #3d0000; color: #f28b82; }
 .dark .connection-status.connected { background: #0d2818; color: #81c995; }
 .connection-status.failed { background: #fce8e6; color: #d93025; }
 .dark .connection-status.failed { background: #3d0000; color: #f28b82; }

@@ -15,6 +15,11 @@
       <button v-if="chat.messages.length" class="btn-ghost btn-sm" @click="chat.clearMessages()" title="清空对话">清空</button>
     </div>
 
+    <!-- LLM 未配置提醒 -->
+    <div v-if="!llmConfigured" class="api-warning">
+      <span>⚠️ 尚未配置大模型 API，请先前往<a href="/settings" @click.prevent="$router.push('/settings')">设置页面</a>配置</span>
+    </div>
+
     <!-- 消息区域 -->
     <div class="messages-area" ref="messagesRef">
       <div v-if="chat.messages.length === 0" class="messages-empty">
@@ -129,10 +134,14 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { usePapersStore } from '@/stores/papers'
+import { useSettingsStore } from '@/stores/settings'
 import { PRESETS, REASONING_LEVELS, getPresetsByMode } from '@/api/prompts'
 
 const chat = useChatStore()
 const papers = usePapersStore()
+const settings = useSettingsStore()
+
+const llmConfigured = computed(() => settings.isConfigured)
 const messagesRef = ref(null)
 const inputRef = ref(null)
 const presetRef = ref(null)
@@ -268,6 +277,28 @@ onUnmounted(() => {
   justify-content: center;
   height: 100%;
   color: var(--color-text-muted);
+
+.api-warning {
+  margin: 8px 12px;
+  padding: 8px 12px;
+  background: #fef7e0;
+  border: 1px solid #fdd663;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #b06000;
+  text-align: center;
+  flex-shrink: 0;
+}
+.api-warning a {
+  color: var(--color-accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.dark .api-warning {
+  background: #3d2e00;
+  border-color: #5c3d00;
+  color: #fdd663;
+}
   font-size: 14px;
 }
 

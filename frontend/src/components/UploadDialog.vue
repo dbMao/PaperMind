@@ -34,13 +34,10 @@
           </div>
           <input ref="fileInput" type="file" accept=".pdf" style="display:none" @change="onFilePicked" />
 
-          <!-- 文件夹选择 -->
-          <div class="form-group">
-            <label>目标文件夹</label>
-            <select v-model="targetFolderId">
-              <option v-for="f in papers.folders" :key="f.id" :value="f.id">{{ f.name }}</option>
-            </select>
-          </div>
+          <!-- Embedding 状态（仅在未部署时提示） -->
+          <p v-if="!embeddingChecking && embeddingStatus === 'not_deployed'" class="ai-warning">
+            ⚠️ Embedding 模型尚未部署（~90MB），上传论文前请先在<a href="/settings" @click.prevent="$router.push('/settings')" style="color: var(--color-accent); font-weight: 600;">设置页</a>部署，否则上传可能失败。
+          </p>
 
           <!-- AI 增强选项 -->
           <label class="checkbox-label">
@@ -51,6 +48,16 @@
             ⚠️ 此选项将调用大模型 API 进行语义分割，会消耗额外的 tokens。建议仅对重要论文使用。
           </p>
         </div>
+
+        <!-- 上传进度 -->
+        <div v-if="uploading" class="upload-progress-area">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: uploadPercent + '%' }"></div>
+          </div>
+          <p class="progress-step">{{ uploadStep }}</p>
+        </div>
+
+        <div v-if="uploadError" class="upload-error">{{ uploadError }}</div>
 
         <div class="dialog-footer">
           <button class="btn btn-secondary" @click="$emit('close')">取消</button>
@@ -64,7 +71,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import apiClient from '@/api'
 import { usePapersStore } from '@/stores/papers'
 
 const props = defineProps({
@@ -76,10 +84,41 @@ const papers = usePapersStore()
 
 const isDragover = ref(false)
 const selectedFile = ref(null)
-const targetFolderId = ref(1) // 默认未分类
 const enableAI = ref(false)
 const uploading = ref(false)
+const uploadError = ref('')
+const uploadStep = ref('')
+const uploadPercent = ref(0)
 const fileInput = ref(null)
+const embeddingStatus = ref('checking')
+const embeddingChecking = ref(false)
+
+// 对话框打开时检查 embedding 状态
+watch(
+  () => props.visible,
+  async (v) => {
+    if (v) {
+      uploadError.value = ''
+      uploadStep.value = ''
+      uploadPercent.value = 0
+      // 检查 embedding
+      embeddingChecking.value = true
+      embeddingStatus.value = 'checking'
+      try {
+        const res = await apiClient.get('/embedding/status')
+        if (res.code === 0) {
+          embeddingStatus.value = res.data?.deployed ? 'deployed' : 'not_deployed'
+        } else {
+          embeddingStatus.value = 'not_deployed'
+        }
+      } catch (e) {
+        console.error('Embedding 状态检查失败:', e)
+        embeddingStatus.value = 'check_error'
+      }
+      embeddingChecking.value = false
+    }
+  }
+)
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B'
@@ -95,6 +134,7 @@ function onFilePicked(e) {
   const file = e.target.files[0]
   if (file && file.type === 'application/pdf') {
     selectedFile.value = file
+    uploadError.value = ''
   }
 }
 
@@ -103,31 +143,69 @@ function handleDrop(e) {
   const file = e.dataTransfer.files[0]
   if (file && file.type === 'application/pdf') {
     selectedFile.value = file
+    uploadError.value = ''
   }
 }
 
 async function handleUpload() {
   if (!selectedFile.value) return
   uploading.value = true
+  uploadError.value = ''
+  uploadPercent.value = 0
 
-  // TODO: 替换为真实 API 调用 POST /api/papers/upload
-  await new Promise((r) => setTimeout(r, 1200))
+  // 步骤 1: 上传文件
+  uploadStep.value = '正在上传 PDF 文件...'
+  uploadPercent.value = 10
 
-  // 模拟上传成功，添加到 store
-  papers.addPaper({
-    id: Date.now(),
-    title: selectedFile.value.name.replace('.pdf', ''),
-    authors: ['待解析'],
-    year: null,
-    folderId: targetFolderId.value,
-    abstract: '论文解析中...',
-    createdAt: new Date().toISOString().slice(0, 10),
-  })
+  try {
+    const formData = new FormData()
+    formData.append('file', selectedFile.value)
+    formData.append('enable_ai_enhance', enableAI.value)
+
+    // 模拟步骤推进
+    const stepTimer = setInterval(() => {
+      if (uploadPercent.value < 50) uploadPercent.value += 3
+    }, 500)
+
+    const res = await apiClient.post('/papers/upload', formData, {
+      params: { folder_id: papers.currentFolderId },
+      timeout: 120000,
+    })
+
+    clearInterval(stepTimer)
+
+    if (res.code === 0 && res.data) {
+      // 步骤 2: 处理中
+      uploadStep.value = '正在解析论文、生成向量索引...'
+      uploadPercent.value = 80
+
+      papers.addPaper({
+        id: res.data.id,
+        title: res.data.title,
+        authors: res.data.authors || [],
+        year: res.data.year,
+        folderId: res.data.folder_id,
+        abstract: res.data.abstract || '',
+        createdAt: res.data.created_at,
+      })
+
+      uploadPercent.value = 100
+      uploadStep.value = '上传完成!'
+
+      setTimeout(() => {
+        emit('uploaded')
+        emit('close')
+      }, 500)
+    } else {
+      uploadError.value = res.message || '上传失败'
+    }
+  } catch (err) {
+    console.error('上传失败:', err)
+    uploadError.value = err.response?.data?.message || err.message || '上传失败，请检查后端服务是否运行'
+  }
 
   uploading.value = false
   selectedFile.value = null
-  emit('uploaded')
-  emit('close')
 }
 </script>
 
@@ -230,6 +308,41 @@ async function handleUpload() {
   line-height: 1.5;
 }
 .dark .ai-warning { background: #3d2e00; color: #fdd663; }
+
+.upload-progress-area {
+  margin: 0 20px 8px;
+  padding: 12px 16px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+}
+.progress-bar {
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+.progress-step {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.upload-error {
+  margin: 0 20px 8px;
+  padding: 8px 12px;
+  background: #fce8e6;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: #d93025;
+}
+.dark .upload-error { background: #3d0000; color: #f28b82; }
 
 .dialog-footer {
   display: flex;

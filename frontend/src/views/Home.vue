@@ -26,7 +26,6 @@
       <!-- 状态一：未选中论文 → 欢迎页 -->
       <WelcomeScreen
         v-if="!papersStore.selectedPaperId"
-        @open-upload="showUpload = true"
       />
 
       <!-- 状态二：选中论文 → 论文 + 对话 -->
@@ -112,11 +111,11 @@ function stopResize() {
 
 .expand-sidebar-btn {
   position: absolute;
-  top: 60px;
+  top: 8px;
   left: 0;
   z-index: 10;
-  width: 32px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   background: var(--color-bg-sidebar);
   border: 1px solid var(--color-border);
   border-left: none;
@@ -126,8 +125,9 @@ function stopResize() {
   justify-content: center;
   color: var(--color-text-secondary);
   cursor: pointer;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.08);
 }
-.expand-sidebar-btn:hover { color: var(--color-accent); }
+.expand-sidebar-btn:hover { color: var(--color-text-primary); background: var(--color-bg-hover); }
 
 .resize-handle {
   width: 4px;
