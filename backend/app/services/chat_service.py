@@ -152,14 +152,17 @@ class ChatService:
                 "chunk_text": chunk_text,
             })
 
-        # 也检索历史对话消息
-        msg_paper_id = paper_id if mode == "single" else None
-        msg_docs = vector_service.search_messages(question, paper_id=msg_paper_id, k=3)
-        if msg_docs:
-            context_str += "\n[历史相关对话]\n"
-            for doc in msg_docs:
-                role = doc.metadata.get("role", "")
-                context_str += f"[{role}]: {doc.page_content[:500]}\n"
+        # 也检索历史对话消息（失败不阻塞主流程）
+        try:
+            msg_paper_id = paper_id if mode == "single" else None
+            msg_docs = vector_service.search_messages(question, paper_id=msg_paper_id, k=3)
+            if msg_docs:
+                context_str += "\n[历史相关对话]\n"
+                for doc in msg_docs:
+                    role = doc.metadata.get("role", "")
+                    context_str += f"[{role}]: {doc.page_content[:500]}\n"
+        except Exception as e:
+            logger.warning(f"历史对话检索失败（跳过）: {e}")
 
         if not context_str and not selected_text:
             context_str = "（未找到相关论文内容，请基于你的知识回答）"

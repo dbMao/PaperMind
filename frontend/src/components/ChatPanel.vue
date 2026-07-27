@@ -198,9 +198,15 @@ const sessionLabel = computed(() => {
 function onModeChange(m) {
   chat.setMode(m)
   const pid = m === 'single' ? papers.selectedPaperId : null
-  chat.clearMessages()
-  chat.fetchSessions(pid)
+  chat.switchToPaper(pid)
 }
+
+// 切换论文时自动加载该论文最近的对话
+watch(() => papers.selectedPaperId, (pid) => {
+  if (chat.mode === 'single') {
+    chat.switchToPaper(pid)
+  }
+})
 
 function switchSession(s) {
   showSessions.value = false
@@ -292,7 +298,7 @@ onMounted(() => {
   window.addEventListener('paper-selection-ask', onPaperSelectionAsk)
   document.addEventListener('click', onClickDocument)
   document.addEventListener('click', onClickDoc)
-  chat.fetchSessions(papers.selectedPaperId)
+  chat.switchToPaper(papers.selectedPaperId)
 })
 onUnmounted(() => {
   window.removeEventListener('paper-selection-ask', onPaperSelectionAsk)
@@ -320,10 +326,10 @@ onUnmounted(() => {
 }
 .header-actions { display: flex; align-items: center; gap: 4px; }
 
-.session-selector { position: relative; }
-.session-btn { font-size: 12px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-selector { position: relative; border-color: #3d2e00; border-width: 2px; }
+.session-btn { font-size: 12px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
 .session-dropdown {
-  position: absolute; top: 100%; left: 0; z-index: 20;
+  position: absolute; top: 100%; left: -300%; z-index: 20;
   background: var(--color-bg-primary); border: 1px solid var(--color-border);
   border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
   min-width: 180px; max-height: 240px; overflow-y: auto; margin-top: 2px;
@@ -365,7 +371,7 @@ onUnmounted(() => {
 .messages-area {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -409,8 +415,8 @@ onUnmounted(() => {
 .message.assistant { justify-content: flex-start; }
 
 .message-bubble {
-  max-width: 85%;
-  padding: 10px 14px;
+  max-width: 100%;
+  padding: 10px 24px;
   border-radius: var(--radius-md);
   font-size: 14px;
   line-height: 1.65;

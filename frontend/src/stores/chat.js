@@ -23,13 +23,23 @@ export const useChatStore = defineStore('chat', () => {
 
   async function fetchSessions(paperId = null) {
     try {
-      const params = {}
-      if (paperId) params.paper_id = paperId
+      const params = { mode: mode.value }
       if (mode.value === 'single' && paperId) params.paper_id = paperId
       const res = await apiClient.get('/chat/sessions', { params })
       if (res.code === 0) sessions.value = res.data || []
+      return sessions.value
     } catch (e) {
       console.error('获取会话列表失败:', e)
+      return []
+    }
+  }
+
+  // 切换到论文时：加载该论文的会话列表 + 自动打开最近一次
+  async function switchToPaper(paperId) {
+    clearMessages()
+    const list = await fetchSessions(paperId)
+    if (list.length > 0) {
+      await loadSession(list[0].id)
     }
   }
 
@@ -128,7 +138,7 @@ export const useChatStore = defineStore('chat', () => {
           question: text.trim(),
           paper_id: paperId,
           selected_text: selectedText,
-          session_id: sessionId.value,
+          session_id: sessionId.value ? String(sessionId.value) : null,
           mode: mode.value,
           reasoning_effort: reasoningEffort.value,
           preset_id: activePresetId.value,
@@ -203,6 +213,6 @@ export const useChatStore = defineStore('chat', () => {
     reasoningEffort, activePresetId, activePreset, sessions,
     addMessage, sendMessage, clearMessages, newChat,
     setMode, setReasoningEffort, setPreset, clearPreset,
-    fetchSessions, loadSession, createSession, deleteSession,
+    fetchSessions, loadSession, createSession, deleteSession, switchToPaper,
   }
 })

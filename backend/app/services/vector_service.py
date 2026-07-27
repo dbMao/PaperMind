@@ -69,11 +69,6 @@ class VectorService:
             persist_directory=persist_dir,
             collection_name=self._collection_name,
         )
-        self._msg_store = Chroma(
-            embedding_function=self._embeddings,
-            persist_directory=persist_dir,
-            collection_name=self._msg_collection_name,
-        )
 
     def add_chunks(
         self,
@@ -152,6 +147,20 @@ class VectorService:
             return []
 
 
+    def _ensure_msg_store(self):
+        """懒加载消息 collection（与 papers 分离，避免阻塞）"""
+        if self._msg_store is not None:
+            return
+        self._ensure_init()
+        try:
+            self._msg_store = Chroma(
+                embedding_function=self._embeddings,
+                persist_directory=str(app_settings.CHROMA_PERSIST_DIR),
+                collection_name=self._msg_collection_name,
+            )
+        except Exception as e:
+            logger.warning(f"消息 collection 初始化失败: {e}")
+
     def add_message(
         self,
         msg_id: int,
@@ -161,8 +170,10 @@ class VectorService:
         role: str,
     ):
         """嵌入一条对话消息到向量库"""
-        self._ensure_init()
         if not content or len(content.strip()) < 10:
+            return
+        self._ensure_msg_store()
+        if not self._msg_store:
             return
         doc_id = f"msg_{msg_id}"
         try:
@@ -189,7 +200,9 @@ class VectorService:
         k: int = 3,
     ) -> list[Document]:
         """检索相关历史对话消息"""
-        self._ensure_init()
+        self._ensure_msg_store()
+        if not self._msg_store:
+            return []
         try:
             if self._msg_store._collection.count() == 0:
                 return []

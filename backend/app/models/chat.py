@@ -13,7 +13,7 @@ class ChatAskRequest(BaseModel):
     question: str = Field(..., min_length=1, description="用户问题")
     paper_id: int | None = Field(default=None, description="单篇模式：论文 ID")
     selected_text: str | None = Field(default=None, description="划词选中的文本")
-    session_id: str | None = Field(default=None, description="继续已有会话的 session_id")
+    session_id: int | str | None = Field(default=None, description="继续已有会话的 session_id")
     mode: Literal["single", "global"] = Field(default="single", description="对话模式")
     reasoning_effort: Literal["low", "medium", "high"] = Field(
         default="medium", description="推理强度"

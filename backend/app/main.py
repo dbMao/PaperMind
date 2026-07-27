@@ -57,8 +57,9 @@ async def startup():
     Path(app_settings.CHROMA_PERSIST_DIR).mkdir(parents=True, exist_ok=True)
     app_settings.pdf_storage_dir  # 自动创建 pdfs/ 目录
 
-    # 创建数据库表
+    # 启用 SQLite WAL 模式（允许并发读写，避免 SSE 流式时 DB 锁死）
     async with engine.begin() as conn:
+        await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.run_sync(Base.metadata.create_all)
 
     # 数据库迁移
