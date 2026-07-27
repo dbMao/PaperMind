@@ -1,18 +1,28 @@
 <template>
   <div class="chat-panel">
-    <!-- 顶部模式切换 -->
+    <!-- 顶部模式 + 会话管理 -->
     <div class="chat-header">
       <div class="mode-tabs">
-        <button
-          :class="{ active: chat.mode === 'single' }"
-          @click="chat.setMode('single')"
-        >单篇问答</button>
-        <button
-          :class="{ active: chat.mode === 'global' }"
-          @click="chat.setMode('global')"
-        >全局问答</button>
+        <button :class="{ active: chat.mode === 'single' }" @click="onModeChange('single')">单篇问答</button>
+        <button :class="{ active: chat.mode === 'global' }" @click="onModeChange('global')">全局问答</button>
       </div>
-      <button v-if="chat.messages.length" class="btn-ghost btn-sm" @click="chat.clearMessages()" title="清空对话">清空</button>
+      <div class="header-actions">
+        <div class="session-selector" ref="sessionRef">
+          <button v-if="chat.sessions.length" class="btn-ghost btn-sm session-btn" @click="showSessions = !showSessions">
+            {{ sessionLabel }}
+          </button>
+          <div v-if="showSessions" class="session-dropdown">
+            <div v-for="s in chat.sessions" :key="s.id" class="session-item"
+              :class="{ active: chat.sessionId == s.id }"
+              @click="switchSession(s)">
+              <span class="session-title">{{ s.title || '未命名' }}</span>
+              <span class="session-time">{{ s.updated_at?.slice(0,10) }}</span>
+              <button class="btn-ghost btn-sm session-del" @click.stop="chat.deleteSession(s.id)">✕</button>
+            </div>
+          </div>
+        </div>
+        <button class="btn-ghost btn-sm" @click="chat.newChat()" title="新对话">+ 新对话</button>
+      </div>
     </div>
 
     <!-- LLM 未配置提醒 -->
@@ -33,7 +43,7 @@
         :class="msg.role"
       >
         <div class="message-bubble">
-          <div class="message-text" v-html="renderText(msg.content)"></div>
+          <div class="message-text" v-html="renderMarkdown(msg.content)"></div>
 
           <!-- 引用来源 -->
           <div v-if="msg.sources && msg.sources.length" class="message-sources">
@@ -47,9 +57,10 @@
         </div>
       </div>
 
-      <!-- 流式输出光标 -->
+      <!-- AI 思考中动画 -->
       <div v-if="chat.isStreaming" class="typing-indicator">
-        <span></span><span></span><span></span>
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+        <span class="typing-text">思考中...</span>
       </div>
     </div>
 
@@ -109,6 +120,17 @@
         </div>
       </div>
 
+      <!-- 对比模式：论文多选 -->
+      <div v-if="showComparePicker" class="compare-picker">
+        <span class="compare-hint">选择要对比的论文（至少 2 篇）：已选 {{ comparePaperIds.length }}</span>
+        <div class="compare-paper-list">
+          <label v-for="p in papers.papers" :key="p.id" class="compare-paper-item">
+            <input type="checkbox" :checked="comparePaperIds.includes(p.id)" @change="toggleComparePaper(p.id)" />
+            <span>{{ p.title }}</span>
+          </label>
+        </div>
+      </div>
+
       <!-- 输入行 -->
       <div class="input-row">
         <textarea
@@ -120,7 +142,7 @@
         ></textarea>
         <button
           class="btn btn-primary send-btn"
-          :disabled="!chat.inputText.trim() || chat.isStreaming"
+          :disabled="!chat.inputText.trim() || chat.isStreaming || (showComparePicker && comparePaperIds.length < 2)"
           @click="handleSend"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -135,11 +157,59 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { usePapersStore } from '@/stores/papers'
 import { useSettingsStore } from '@/stores/settings'
+import { marked } from 'marked'
+import katex from 'katex'
+
+// Markdown + LaTeX 渲染器
+function renderMarkdown(text) {
+  if (!text) return ''
+  // 处理块级公式 $$...$$
+  let html = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
+    try { return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false }) }
+    catch { return `<pre>${math}</pre>` }
+  })
+  // 处理行内公式 $...$
+  html = html.replace(/\$([^\$]+?)\$/g, (_, math) => {
+    try { return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false }) }
+    catch { return `$${math}$` }
+  })
+  // Markdown 渲染（marked 只负责文本排版）
+  try {
+    const parsed = marked.parse(html, { breaks: true })
+    return typeof parsed === 'string' ? parsed : html
+  } catch {
+    return html.replace(/\n/g, '<br>')
+  }
+}
 import { PRESETS, REASONING_LEVELS, getPresetsByMode } from '@/api/prompts'
 
 const chat = useChatStore()
 const papers = usePapersStore()
 const settings = useSettingsStore()
+
+// 会话管理
+const showSessions = ref(false)
+const sessionRef = ref(null)
+const sessionLabel = computed(() => {
+  const s = chat.sessions.find(s => s.id == chat.sessionId)
+  return s ? (s.title || '未命名') : '对话'
+})
+
+function onModeChange(m) {
+  chat.setMode(m)
+  const pid = m === 'single' ? papers.selectedPaperId : null
+  chat.clearMessages()
+  chat.fetchSessions(pid)
+}
+
+function switchSession(s) {
+  showSessions.value = false
+  chat.loadSession(s.id)
+}
+
+function onClickDoc(e) {
+  if (sessionRef.value && !sessionRef.value.contains(e.target)) showSessions.value = false
+}
 
 const llmConfigured = computed(() => settings.isConfigured)
 const messagesRef = ref(null)
@@ -175,17 +245,23 @@ function selectPreset(id) {
   presetMenuOpen.value = false
 }
 
+// 对比模式：论文多选
+const comparePaperIds = ref([])
+const showComparePicker = computed(() => chat.activePresetId === 'compare')
+
+function toggleComparePaper(id) {
+  const idx = comparePaperIds.value.indexOf(id)
+  if (idx >= 0) comparePaperIds.value.splice(idx, 1)
+  else comparePaperIds.value.push(id)
+}
+
 function handleSend() {
   const pid = chat.mode === 'single' ? papers.selectedPaperId : null
-  chat.sendMessage(chat.inputText, pid)
+  const pids = showComparePicker.value ? [...comparePaperIds.value] : null
+  chat.sendMessage(chat.inputText, pid, null, pids)
 }
 
 // 简单 markdown 渲染（换行 → <br>）
-function renderText(text) {
-  if (!text) return ''
-  return text.replace(/\n/g, '<br>')
-}
-
 // 自动滚动到底部
 function scrollToBottom() {
   nextTick(() => {
@@ -215,10 +291,13 @@ function onClickDocument(e) {
 onMounted(() => {
   window.addEventListener('paper-selection-ask', onPaperSelectionAsk)
   document.addEventListener('click', onClickDocument)
+  document.addEventListener('click', onClickDoc)
+  chat.fetchSessions(papers.selectedPaperId)
 })
 onUnmounted(() => {
   window.removeEventListener('paper-selection-ask', onPaperSelectionAsk)
   document.removeEventListener('click', onClickDocument)
+  document.removeEventListener('click', onClickDoc)
 })
 </script>
 
@@ -237,7 +316,28 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 10px 16px;
   border-bottom: 1px solid var(--color-border-light);
+  flex-wrap: wrap; gap: 4px;
 }
+.header-actions { display: flex; align-items: center; gap: 4px; }
+
+.session-selector { position: relative; }
+.session-btn { font-size: 12px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-dropdown {
+  position: absolute; top: 100%; left: 0; z-index: 20;
+  background: var(--color-bg-primary); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  min-width: 180px; max-height: 240px; overflow-y: auto; margin-top: 2px;
+}
+.session-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; cursor: pointer;
+}
+.session-item:hover { background: var(--color-bg-hover); }
+.session-item.active { background: var(--color-accent-light); }
+.session-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-time { font-size: 11px; color: var(--color-text-muted); }
+.session-del { display: none; }
+.session-item:hover .session-del { display: inline-flex; }
 
 .mode-tabs {
   display: flex;
@@ -484,6 +584,19 @@ onUnmounted(() => {
 }
 
 /* 输入行 */
+.compare-picker {
+  margin: 8px 12px 0; padding: 8px 10px;
+  background: var(--color-bg-secondary); border-radius: 6px;
+}
+.compare-hint { font-size: 12px; color: var(--color-text-muted); margin-bottom: 4px; display: block; }
+.compare-paper-list { max-height: 120px; overflow-y: auto; }
+.compare-paper-item {
+  display: flex; align-items: center; gap: 6px; padding: 3px 0;
+  font-size: 12px; cursor: pointer;
+}
+.compare-paper-item input { flex-shrink: 0; }
+.compare-paper-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .input-row {
   display: flex;
   align-items: flex-end;
@@ -525,22 +638,21 @@ onUnmounted(() => {
 
 /* 打字指示器 */
 .typing-indicator {
-  display: flex;
-  gap: 4px;
+  display: flex; align-items: center; gap: 8px;
   padding: 8px 14px;
 }
-.typing-indicator span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-text-muted);
-  animation: blink 1.4s infinite both;
+.typing-dots { display: flex; gap: 4px; }
+.typing-dots span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--color-accent);
+  animation: typing-blink 1.4s infinite both;
 }
-.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+.typing-text { font-size: 12px; color: var(--color-text-muted); }
 
-@keyframes blink {
-  0%, 80%, 100% { opacity: 0.2; }
-  40% { opacity: 1; }
+@keyframes typing-blink {
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
 }
 </style>

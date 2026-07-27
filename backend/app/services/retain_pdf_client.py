@@ -85,10 +85,9 @@ class RetainPDFClient:
 
             # 查找输出文件（pdf2zh 输出为 <name>-mono.pdf 或 <name>-dual.pdf）
             base = os.path.splitext(os.path.basename(pdf_path))[0]
-            # 优先取 dual（双语对照，无叠层黑线），其次 mono（纯译文）
             candidates = [
-                os.path.join(output_dir, f"{base}-dual.pdf"),
                 os.path.join(output_dir, f"{base}-mono.pdf"),
+                os.path.join(output_dir, f"{base}-dual.pdf"),
             ]
             out_path = None
             for c in candidates:

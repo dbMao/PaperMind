@@ -13,11 +13,16 @@ from app.core.response import error as error_response
 from app.db.database import engine, async_session
 from app.db.models import Base, Folder, LLMSettings
 
-# 配置日志
+# 配置日志：只显示 PaperMind 自己的日志，关闭第三方库的 DEBUG 输出
 logging.basicConfig(
-    level=logging.DEBUG if app_settings.DEBUG else logging.INFO,
+    level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+logging.getLogger("papermind").setLevel(logging.DEBUG if app_settings.DEBUG else logging.INFO)
+# 关闭第三方库的调试日志
+for lib in ["sqlalchemy", "aiosqlite", "httpx", "httpcore", "chromadb", "sentence_transformers", "openai", "watchfiles", "urllib3"]:
+    logging.getLogger(lib).setLevel(logging.WARNING)
+
 logger = logging.getLogger("papermind")
 
 app = FastAPI(

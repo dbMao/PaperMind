@@ -42,7 +42,7 @@ router = APIRouter(prefix="/papers", tags=["Papers"])
 @router.get("")
 async def list_papers(
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    page_size: int = Query(default=20, ge=1, le=1000),
     folder_id: int | None = Query(default=None, description="文件夹 ID 筛选"),
     search: str | None = Query(default=None, description="标题搜索"),
     db: AsyncSession = Depends(get_db),

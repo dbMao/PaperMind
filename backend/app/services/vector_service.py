@@ -19,8 +19,10 @@ class VectorService:
 
     _instance = None
     _store: Chroma | None = None
+    _msg_store: Chroma | None = None
     _embeddings: HuggingFaceEmbeddings | None = None
     _collection_name = "papers"
+    _msg_collection_name = "messages"
 
     def __new__(cls):
         if cls._instance is None:
@@ -37,7 +39,6 @@ class VectorService:
         model_name = "sentence-transformers/all-MiniLM-L6-v2"
         model_path = str(app_settings.EMBEDDING_MODEL_DIR)
 
-        # 优先使用本地部署目录，其次 HF 缓存，最后在线下载
         from pathlib import Path
         local_dir = Path(model_path)
         if local_dir.exists() and any(local_dir.iterdir()):
@@ -48,7 +49,6 @@ class VectorService:
             )
             logger.info(f"使用本地 embedding 模型: {model_path}")
         elif embedding_service.is_deployed:
-            # 模型在 HF 缓存中，使用模型名自动从缓存加载
             self._embeddings = HuggingFaceEmbeddings(
                 model_name=model_name,
                 model_kwargs={"device": "cpu"},
@@ -68,6 +68,11 @@ class VectorService:
             embedding_function=self._embeddings,
             persist_directory=persist_dir,
             collection_name=self._collection_name,
+        )
+        self._msg_store = Chroma(
+            embedding_function=self._embeddings,
+            persist_directory=persist_dir,
+            collection_name=self._msg_collection_name,
         )
 
     def add_chunks(
@@ -144,6 +149,56 @@ class VectorService:
             return results
         except Exception as e:
             logger.warning(f"向量检索失败 (可能 collection 为空): {e}")
+            return []
+
+
+    def add_message(
+        self,
+        msg_id: int,
+        content: str,
+        paper_id: int | None,
+        session_id: int,
+        role: str,
+    ):
+        """嵌入一条对话消息到向量库"""
+        self._ensure_init()
+        if not content or len(content.strip()) < 10:
+            return
+        doc_id = f"msg_{msg_id}"
+        try:
+            self._msg_store.add_documents(
+                [Document(
+                    page_content=content[:2000],
+                    metadata={
+                        "msg_id": msg_id,
+                        "paper_id": paper_id or 0,
+                        "session_id": session_id,
+                        "role": role,
+                    },
+                    id=doc_id,
+                )],
+                ids=[doc_id],
+            )
+        except Exception as e:
+            logger.warning(f"嵌入消息 #{msg_id} 失败: {e}")
+
+    def search_messages(
+        self,
+        query: str,
+        paper_id: int | None = None,
+        k: int = 3,
+    ) -> list[Document]:
+        """检索相关历史对话消息"""
+        self._ensure_init()
+        try:
+            if self._msg_store._collection.count() == 0:
+                return []
+            filter_dict = None
+            if paper_id is not None:
+                filter_dict = {"paper_id": paper_id}
+            return self._msg_store.similarity_search(query, k=k, filter=filter_dict)
+        except Exception as e:
+            logger.warning(f"消息检索失败: {e}")
             return []
 
 

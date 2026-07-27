@@ -7,6 +7,7 @@ export const usePapersStore = defineStore('papers', () => {
   const folders = ref([])
 
   const selectedPaperId = ref(null)
+  const viewingTranslation = ref(false)  // 是否正在查看译文附件
   const searchQuery = ref('')
   const currentFolderId = ref(null)
   const isSearching = ref(false)
@@ -32,8 +33,7 @@ export const usePapersStore = defineStore('papers', () => {
   async function fetchPapers() {
     isSearching.value = true
     try {
-      const params = { page: 1, page_size: 100 }
-      if (currentFolderId.value != null) params.folder_id = currentFolderId.value
+      const params = { page: 1, page_size: 500 }
       if (searchQuery.value.trim()) params.search = searchQuery.value.trim()
 
       const res = await apiClient.get('/papers', { params })
@@ -66,9 +66,20 @@ export const usePapersStore = defineStore('papers', () => {
     }
   }
 
-  // 初始化
-  fetchFolders()
-  fetchPapers()
+  // 初始化加载（后端启动较慢时自动重试）
+  async function initLoad(retries = 5) {
+    try {
+      await fetchFolders()
+      await fetchPapers()
+    } catch {
+      if (retries > 0) {
+        console.log(`后端尚未就绪，3秒后重试... 剩余 ${retries} 次`)
+        setTimeout(() => initLoad(retries - 1), 3000)
+      }
+    }
+  }
+
+  initLoad()
 
   // ===== 搜索（防抖 300ms） =====
 
@@ -80,17 +91,22 @@ export const usePapersStore = defineStore('papers', () => {
     }, 300)
   }
 
-  // ===== 文件夹切换 =====
+  // ===== 文件夹切换（仅客户端筛选，不重新请求） =====
 
   function setFolder(id) {
     currentFolderId.value = id
-    fetchPapers()
   }
 
   // ===== 论文操作 =====
 
   function selectPaper(id) {
-    selectedPaperId.value = id
+    // 正在看该论文译文 → 切回原文，不关闭
+    if (selectedPaperId.value === id && viewingTranslation.value) {
+      viewingTranslation.value = false
+      return
+    }
+    selectedPaperId.value = selectedPaperId.value === id ? null : id
+    viewingTranslation.value = false
   }
 
   function addPaper(paper) {
@@ -151,6 +167,7 @@ export const usePapersStore = defineStore('papers', () => {
     papers,
     folders,
     selectedPaperId,
+    viewingTranslation,
     searchQuery,
     currentFolderId,
     isSearching,

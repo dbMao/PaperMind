@@ -67,6 +67,15 @@
         </div>
       </div>
     </div>
+
+    <!-- 上传进度独立弹窗 -->
+    <div v-if="uploading" class="progress-overlay">
+      <div class="progress-dialog">
+        <h4>正在上传论文</h4>
+        <div class="progress-bar"><div class="progress-fill" :style="{ width: uploadPercent + '%' }"></div></div>
+        <p class="progress-step">{{ uploadStep }}</p>
+      </div>
+    </div>
   </Teleport>
 </template>
 
@@ -153,31 +162,44 @@ async function handleUpload() {
   uploadError.value = ''
   uploadPercent.value = 0
 
-  // 步骤 1: 上传文件
-  uploadStep.value = '正在上传 PDF 文件...'
-  uploadPercent.value = 10
+  uploadStep.value = '正在保存 PDF 文件...'
+  uploadPercent.value = 5
+
+  const file = selectedFile.value
+  emit('close')
+
+  const steps = [
+    { pct: 15,  text: '正在提取文本与标题结构...' },
+    { pct: 30,  text: '正在识别段落与章节边界...' },
+    { pct: 50,  text: '正在将论文切分为语义片段...' },
+    { pct: 70,  text: '正在生成向量索引（本地 Embedding 模型）...' },
+    { pct: 85,  text: '正在保存解析结果...' },
+  ]
+  let stepIdx = 0
 
   try {
     const formData = new FormData()
-    formData.append('file', selectedFile.value)
+    formData.append('file', file)
     formData.append('enable_ai_enhance', enableAI.value)
 
-    // 模拟步骤推进
-    const stepTimer = setInterval(() => {
-      if (uploadPercent.value < 50) uploadPercent.value += 3
-    }, 500)
+    const timer = setInterval(() => {
+      if (stepIdx < steps.length && uploadPercent.value >= steps[stepIdx].pct) {
+        uploadStep.value = steps[stepIdx].text
+        stepIdx++
+      }
+      if (uploadPercent.value < 85) uploadPercent.value += 2
+    }, 400)
 
     const res = await apiClient.post('/papers/upload', formData, {
       params: { folder_id: papers.currentFolderId },
       timeout: 120000,
     })
 
-    clearInterval(stepTimer)
+    clearInterval(timer)
 
     if (res.code === 0 && res.data) {
-      // 步骤 2: 处理中
-      uploadStep.value = '正在解析论文、生成向量索引...'
-      uploadPercent.value = 80
+      uploadStep.value = '解析完成，论文已加入文库'
+      uploadPercent.value = 100
 
       papers.addPaper({
         id: res.data.id,
@@ -189,23 +211,21 @@ async function handleUpload() {
         createdAt: res.data.created_at,
       })
 
-      uploadPercent.value = 100
-      uploadStep.value = '上传完成!'
+      papers.fetchFolders()
 
       setTimeout(() => {
+        uploading.value = false
         emit('uploaded')
-        emit('close')
-      }, 500)
+      }, 800)
     } else {
-      uploadError.value = res.message || '上传失败'
+      uploadStep.value = res.message || '上传失败'
+      setTimeout(() => { uploading.value = false }, 2000)
     }
   } catch (err) {
     console.error('上传失败:', err)
-    uploadError.value = err.response?.data?.message || err.message || '上传失败，请检查后端服务是否运行'
+    uploadStep.value = err.response?.data?.message || err.message || '上传失败'
+    setTimeout(() => { uploading.value = false }, 2000)
   }
-
-  uploading.value = false
-  selectedFile.value = null
 }
 </script>
 
@@ -309,31 +329,6 @@ async function handleUpload() {
 }
 .dark .ai-warning { background: #3d2e00; color: #fdd663; }
 
-.upload-progress-area {
-  margin: 0 20px 8px;
-  padding: 12px 16px;
-  background: var(--color-bg-secondary);
-  border-radius: var(--radius-sm);
-}
-.progress-bar {
-  height: 4px;
-  background: var(--color-border);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--color-accent);
-  border-radius: 2px;
-  transition: width 0.5s ease;
-}
-.progress-step {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin: 0;
-}
-
 .upload-error {
   margin: 0 20px 8px;
   padding: 8px 12px;
@@ -351,4 +346,21 @@ async function handleUpload() {
   padding: 16px 20px;
   border-top: 1px solid var(--color-border);
 }
+
+.progress-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.progress-dialog {
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 380px; max-width: 90vw;
+  padding: 32px 28px; text-align: center;
+}
+.progress-dialog h4 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+.progress-bar { height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--color-accent); border-radius: 3px; transition: width 0.5s ease; width: 0; }
+.progress-step { margin-top: 10px; font-size: 13px; color: var(--color-text-secondary); }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div class="home-layout">
     <!-- 左侧：论文库 (可折叠) -->
-    <div class="sidebar" :style="{ width: sidebarCollapsed ? '0px' : papersStore.sidebarWidth + 'px' }">
+    <div class="sidebar" :style="{ width: sidebarCollapsed ? '0px' : uiStore.sidebarWidth + 'px' }">
       <PaperLibrary
         v-if="!sidebarCollapsed"
         @collapse="sidebarCollapsed = true"
@@ -32,7 +32,7 @@
       <template v-else>
         <div class="content-area">
           <!-- 左侧 2/3：论文内容 -->
-          <PaperViewer class="viewer-pane" />
+          <PaperViewer class="viewer-pane" @close="papersStore.selectPaper(null)" />
 
           <!-- 右侧 1/3：对话框 -->
           <ChatPanel class="chat-pane" />
@@ -57,8 +57,10 @@ import PaperViewer from '@/components/PaperViewer.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
 import UploadDialog from '@/components/UploadDialog.vue'
 import { usePapersStore } from '@/stores/papers'
+import { useUiStore } from '@/stores/ui'
 
 const papersStore = usePapersStore()
+const uiStore = useUiStore()
 
 const showUpload = ref(false)
 const sidebarCollapsed = ref(false)
@@ -83,8 +85,8 @@ function startResize(e) {
 
 function onResize(e) {
   if (!isResizing) return
-  const w = Math.min(480, Math.max(200, e.clientX))
-  papersStore.sidebarWidth = w
+  const w = Math.min(380, Math.max(210, e.clientX))
+  uiStore.sidebarWidth = w
 }
 
 function stopResize() {

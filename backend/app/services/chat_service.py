@@ -14,6 +14,7 @@ from app.core.llm import create_llm_from_config
 from app.db.models import LLMSettings, ChatSession, ChatMessage
 from app.services.vector_service import vector_service
 from app.services.compare_service import compare_service
+from app.services.embedding_service import embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,11 @@ class ChatService:
             yield self._sse("error", "请先在设置页配置 LLM API")
             return
 
+        # 检查 embedding 模型
+        if not embedding_service.is_deployed:
+            yield self._sse("error", "Embedding 模型未部署，请先在设置页部署（~90MB）")
+            return
+
         # Step 2: 构建上下文
         context_str = ""
         sources = []
@@ -145,6 +151,15 @@ class ChatService:
                 "page": page,
                 "chunk_text": chunk_text,
             })
+
+        # 也检索历史对话消息
+        msg_paper_id = paper_id if mode == "single" else None
+        msg_docs = vector_service.search_messages(question, paper_id=msg_paper_id, k=3)
+        if msg_docs:
+            context_str += "\n[历史相关对话]\n"
+            for doc in msg_docs:
+                role = doc.metadata.get("role", "")
+                context_str += f"[{role}]: {doc.page_content[:500]}\n"
 
         if not context_str and not selected_text:
             context_str = "（未找到相关论文内容，请基于你的知识回答）"
@@ -197,6 +212,8 @@ class ChatService:
         )
         db.add(user_msg)
         await db.flush()
+        # 嵌入用户消息
+        vector_service.add_message(user_msg.id, question, paper_id, session.id, "user")
 
         # Step 6: 流式生成
         full_response = ""
@@ -236,6 +253,8 @@ class ChatService:
         )
         db.add(assistant_msg)
         await db.flush()
+        # 嵌入助手回复
+        vector_service.add_message(assistant_msg.id, full_response, paper_id, session.id, "assistant")
 
         # Step 7: 发送 sources + done
         yield self._sse("sources", sources=sources)

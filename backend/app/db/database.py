@@ -10,7 +10,7 @@ from app.core.config import settings
 engine = create_async_engine(
     settings.db_url,
     connect_args={"check_same_thread": False},
-    echo=settings.DEBUG,
+    echo=False,
 )
 
 async_session = async_sessionmaker(

@@ -31,7 +31,7 @@
       <div v-for="f in papers.folderWithCounts" :key="f.id">
         <div class="folder-item" :class="{ active: papers.currentFolderId === f.id }" @click="toggleFolder(f)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path v-if="!expandedFolders.has(f.id)" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            <path v-if="!expandedFolderIds.includes(f.id)" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             <path v-else d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v1H4v10z"/>
           </svg>
           <span class="folder-name">{{ f.name }}</span>
@@ -40,13 +40,19 @@
           <button class="btn-ghost btn-sm folder-del" @click.stop="handleDeleteFolder(f)" title="删除">✕</button>
         </div>
 
+        <!-- 重命名输入框（紧贴重命名中的文件夹下方） -->
+        <div v-if="renamingId === f.id" class="folder-input-row">
+          <input v-model="renameText" @keyup.enter="confirmRename" @keyup.escape="cancelRename" />
+          <button class="btn btn-sm btn-primary" @click="confirmRename">确定</button>
+        </div>
+
         <!-- 展开后显示该组别内的论文 -->
-        <template v-if="expandedFolders.has(f.id)">
+        <template v-if="expandedFolderIds.includes(f.id)">
           <div v-if="folderPapers(f.id).length === 0" class="empty-hint" style="padding:8px 16px 8px 36px">暂无论文</div>
           <template v-for="paper in folderPapers(f.id)" :key="paper.id">
             <div
               class="paper-item"
-              :class="{ active: papers.selectedPaperId === paper.id }"
+              :class="{ active: papers.selectedPaperId === paper.id && !papers.viewingTranslation }"
               @click="papers.selectPaper(paper.id)"
             >
               <div class="paper-item-main">
@@ -54,16 +60,13 @@
                 <span class="paper-meta">{{ (paper.authors[0] || '') }} · {{ paper.year || '' }}</span>
               </div>
               <div class="paper-menu-wrap" @click.stop>
-                <button class="btn-ghost btn-sm paper-more" @click="togglePaperMenu(paper.id)">···</button>
-                <div v-if="paperMenuId === paper.id" class="paper-dropdown">
-                  <button @click="movePaper(paper)">📁 移动</button>
-                  <button @click="deletePaper(paper)">🗑 删除</button>
-                </div>
+                <button class="btn-ghost btn-sm paper-more" @click="togglePaperMenu(paper.id, $event)">···</button>
               </div>
             </div>
             <div
               v-if="paper.hasTranslation"
               class="paper-item translation-item"
+              :class="{ active: papers.selectedPaperId === paper.id && papers.viewingTranslation }"
               @click="openTranslated(paper.id)"
             >
               <div class="paper-item-main">
@@ -74,10 +77,6 @@
         </template>
       </div>
 
-      <div v-if="renamingId !== null" class="folder-input-row">
-        <input v-model="renameText" @keyup.enter="confirmRename" @keyup.escape="cancelRename" />
-        <button class="btn btn-sm btn-primary" @click="confirmRename">确定</button>
-      </div>
     </div>
 
     <!-- 移动论文弹窗 -->
@@ -96,6 +95,13 @@
         </div>
       </div>
     </Teleport>
+    <!-- 三点菜单（Teleport 到 body，不受 overflow 裁剪） -->
+    <Teleport to="body">
+      <div v-if="paperMenuId" class="paper-dropdown" :style="{ top: menuY + 'px', left: menuX + 'px', position: 'fixed' }">
+        <button @click="movePaper(papers.papers.find(p => p.id === paperMenuId))">📁 移动</button>
+        <button @click="deletePaper(papers.papers.find(p => p.id === paperMenuId))">🗑 删除</button>
+      </div>
+    </Teleport>
   </aside>
 </template>
 
@@ -108,17 +114,16 @@ const papers = usePapersStore()
 const emit = defineEmits(['collapse', 'open-upload'])
 
 // 展开的组别
-const expandedFolders = ref(new Set())
+const expandedFolderIds = ref([])
 
 function toggleFolder(f) {
-  const s = new Set(expandedFolders.value)
-  if (s.has(f.id)) {
-    s.delete(f.id)
+  const idx = expandedFolderIds.value.indexOf(f.id)
+  if (idx >= 0) {
+    expandedFolderIds.value.splice(idx, 1)
   } else {
-    s.add(f.id)
+    expandedFolderIds.value.push(f.id)
     papers.setFolder(f.id)
   }
-  expandedFolders.value = s
 }
 
 function folderPapers(folderId) {
@@ -131,15 +136,32 @@ function openUploadTo(folder) {
 }
 
 function openTranslated(paperId) {
-  papers.selectPaper(paperId)
-  // 通知 PaperViewer 切换到译文
-  window.dispatchEvent(new CustomEvent('show-translation', { detail: { paperId } }))
+  // 已在该论文译文视图 → 关闭
+  if (papers.selectedPaperId === paperId && papers.viewingTranslation) {
+    papers.selectedPaperId = null
+    papers.viewingTranslation = false
+    return
+  }
+  papers.selectedPaperId = paperId
+  nextTick(() => {
+    papers.viewingTranslation = true
+    window.dispatchEvent(new CustomEvent('show-translation', { detail: { paperId } }))
+  })
 }
 
 // 论文三点菜单
 const paperMenuId = ref(null)
-function togglePaperMenu(id) {
-  paperMenuId.value = paperMenuId.value === id ? null : id
+const menuX = ref(0)
+const menuY = ref(0)
+function togglePaperMenu(id, event) {
+  if (paperMenuId.value === id) { paperMenuId.value = null; return }
+  const btn = event?.currentTarget
+  if (btn) {
+    const rect = btn.getBoundingClientRect()
+    menuX.value = rect.left - 100
+    menuY.value = rect.bottom + 4
+  }
+  paperMenuId.value = id
 }
 function closePaperMenu() { paperMenuId.value = null }
 onMounted(() => document.addEventListener('click', closePaperMenu))
@@ -187,10 +209,8 @@ async function confirmAddFolder() {
   addingFolder.value = true
   try {
     const id = await papers.addFolder(name)
-    if (id !== null) {
-      const s = new Set(expandedFolders.value)
-      s.add(id)
-      expandedFolders.value = s
+    if (id !== null && !expandedFolderIds.value.includes(id)) {
+      expandedFolderIds.value.push(id)
     }
     newFolderName.value = ''
     showAddFolder.value = false
@@ -217,7 +237,6 @@ function cancelRename() { renamingId.value = null }
 <style scoped>
 .paper-library {
   display: flex; flex-direction: column; height: 100%;
-  max-width: 380px;
   background: var(--color-bg-sidebar); border-right: 1px solid var(--color-border);
   overflow: hidden;
 }
@@ -250,9 +269,10 @@ function cancelRename() { renamingId.value = null }
   font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-muted);
 }
 
-.folder-list { flex: 1; overflow-y: auto; }
+.folder-list { flex: 1; overflow-y: auto; overflow-x: visible; }
 
 .folder-item {
+  background-color: rgb(223, 223, 223);
   display: flex; align-items: center; gap: 8px;
   padding: 6px 12px; cursor: pointer; font-size: 13px;
   color: var(--color-text-secondary); transition: all var(--transition);
@@ -262,6 +282,12 @@ function cancelRename() { renamingId.value = null }
 .dark .folder-item.active { background: #444; color: #e8e8e8; }
 .folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folder-add, .folder-edit, .folder-del { display: none; flex-shrink: 0; padding: 2px 4px; font-size: 11px; }
+.folder-item.active .folder-add,
+.folder-item.active .folder-edit,
+.folder-item.active .folder-del { color: #fff; }
+.folder-item.active .folder-add:hover,
+.folder-item.active .folder-edit:hover,
+.folder-item.active .folder-del:hover { color: #fff; opacity: 0.8; }
 .folder-item:hover .folder-add,
 .folder-item:hover .folder-edit,
 .folder-item:hover .folder-del { display: inline-flex; }
@@ -272,27 +298,30 @@ function cancelRename() { renamingId.value = null }
 .empty-hint { padding: 24px 16px; text-align: center; font-size: 13px; color: var(--color-text-muted); }
 
 .paper-item {
+  background-color: #ffffff;
   display: flex; align-items: center; padding: 8px 12px 8px 32px;
   cursor: pointer; transition: all var(--transition); border-left: 3px solid transparent;
+  overflow: hidden; min-width: 0;
 }
 .paper-item:hover { background: var(--color-bg-hover); }
 .paper-item.active { background: var(--color-accent-light); border-left-color: var(--color-accent); }
-.paper-item-main { flex: 1; min-width: 0; }
+.paper-item-main { flex: 1; min-width: 0; overflow: hidden; }
 .paper-title { display: block; font-size: 13px; font-weight: 500; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.paper-meta { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .paper-meta { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; display: block; }
 
-.paper-menu-wrap { position: relative; flex-shrink: 0; }
+.paper-menu-wrap { position: relative; flex-shrink: 0; z-index: 5; }
+.paper-menu-wrap:has(.paper-dropdown) { z-index: 40; }
 .paper-more { opacity: 0; font-size: 16px; letter-spacing: 2px; padding: 2px 4px; }
 .paper-item:hover .paper-more { opacity: 1; }
 
-.translation-item { padding-left: 48px; font-size: 12px; opacity: 0.85; border-left: none; background: var(--color-bg-secondary); }
+.translation-item { padding-left: 48px; font-size: 12px; opacity: 0.85; border-left: none; background: var(--color-bg-secondary); position: relative; z-index: 0; }
 .dark .translation-item { background: rgba(255,255,255,0.03); }
 .translation-item:hover { opacity: 1; background: var(--color-bg-hover); }
 .paper-dropdown {
-  position: absolute; right: 0; top: 100%; z-index: 20;
   background: var(--color-bg-primary); border: 1px solid var(--color-border);
   border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
-  padding: 4px; min-width: 100px;
+  padding: 4px; min-width: 100px; z-index: 9999;
 }
 .paper-dropdown button {
   display: block; width: 100%; padding: 6px 10px; border-radius: var(--radius-sm);
