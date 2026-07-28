@@ -13,9 +13,9 @@
             🌐 {{ translating ? '翻译中...' : '翻译' }}
           </button>
           <div v-if="showTranslateMenu" class="translate-dropdown">
-            <button @click="requestTranslation('openai')">🤖 大模型翻译（更准确，需 API）</button>
-            <button @click="requestTranslation('google')">🔤 Google 翻译（免费，需 VPN）</button>
-            <button @click="requestTranslation('bing')">🔤 Bing 翻译（免费，需 VPN）</button>
+            <button @click="requestTranslation('openai')"> 大模型翻译（更准确，需 API）</button>
+            <button @click="requestTranslation('google')"> Google 翻译（免费，需 VPN）</button>
+            <button @click="requestTranslation('bing')">= Bing 翻译（免费，需 VPN）</button>
           </div>
         </div>
       </div>
@@ -204,7 +204,7 @@ onUnmounted(() => {
   position: absolute; right: 0; top: 100%; z-index: 20;
   background: var(--color-bg-primary); border: 1px solid var(--color-border);
   border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
-  padding: 4px; min-width: 220px; margin-top: 4px;
+  padding: 4px; min-width: 250px; margin-top: 4px;
 }
 .translate-dropdown button {
   display: block; width: 100%; padding: 6px 10px; border-radius: var(--radius-sm);

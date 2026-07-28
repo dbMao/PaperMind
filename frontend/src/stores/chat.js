@@ -34,9 +34,11 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // 切换到论文时：加载该论文的会话列表 + 自动打开最近一次
+  // 切换到论文/模式时：加载对应会话列表 + 自动打开最近一次
   async function switchToPaper(paperId) {
-    clearMessages()
+    messages.value = []
+    sessionId.value = null
+    isStreaming.value = false
     const list = await fetchSessions(paperId)
     if (list.length > 0) {
       await loadSession(list[0].id)

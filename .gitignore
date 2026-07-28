@@ -16,14 +16,15 @@ env/
 # 环境变量（含敏感信息）
 backend/.env
 
-# 本地模型文件（较大，不入库）
-backend/models/
+# 页面图片缓存
+backend/data/page_cache/
 
 # 向量数据库
 backend/chroma_db/
 
 # 运行时数据
 backend/data/
+backend/data/page_cache/
 
 # SQLite 数据库
 *.db

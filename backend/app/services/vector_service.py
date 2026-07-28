@@ -36,6 +36,10 @@ class VectorService:
 
         logger.info("初始化 VectorService...")
 
+        # 强制离线模式，从 HF 缓存加载，不联网
+        import os as _os
+        _os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
         model_name = "sentence-transformers/all-MiniLM-L6-v2"
         model_path = str(app_settings.EMBEDDING_MODEL_DIR)
 

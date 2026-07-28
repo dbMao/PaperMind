@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import create_llm_from_config
+from app.db.database import async_session as _new_session
 from app.db.models import LLMSettings, ChatSession, ChatMessage
 from app.services.vector_service import vector_service
 from app.services.compare_service import compare_service
@@ -207,16 +208,18 @@ class ChatService:
             await db.flush()
             await db.refresh(session)
 
-        # 保存用户消息
-        user_msg = ChatMessage(
-            session_id=session.id,
-            role="user",
-            content=question,
-        )
-        db.add(user_msg)
-        await db.flush()
-        # 嵌入用户消息
-        vector_service.add_message(user_msg.id, question, paper_id, session.id, "user")
+        # 用独立 session 保存消息（避免 SSE 异常被 get_db 回滚）
+        async def _save_msg(role: str, content: str, srcs: list = None) -> int:
+            s = _new_session()
+            async with s:
+                msg = ChatMessage(session_id=session.id, role=role, content=content, sources=srcs or [])
+                s.add(msg)
+                await s.commit()
+                await s.refresh(msg)
+                return msg.id
+
+        user_msg_id = await _save_msg("user", question)
+        vector_service.add_message(user_msg_id, question, paper_id, session.id, "user")
 
         # Step 6: 流式生成
         full_response = ""
@@ -236,28 +239,12 @@ class ChatService:
         except Exception as e:
             logger.exception("LLM 流式调用失败")
             yield self._sse("error", f"调用 LLM 失败: {str(e)[:300]}")
-            # 保存错误响应
-            assistant_msg = ChatMessage(
-                session_id=session.id,
-                role="assistant",
-                content=f"[错误] {str(e)[:500]}",
-                sources=[],
-            )
-            db.add(assistant_msg)
-            await db.flush()
+            await _save_msg("assistant", f"[错误] {str(e)[:500]}")
             return
 
         # 保存 assistant 消息
-        assistant_msg = ChatMessage(
-            session_id=session.id,
-            role="assistant",
-            content=full_response,
-            sources=sources,
-        )
-        db.add(assistant_msg)
-        await db.flush()
-        # 嵌入助手回复
-        vector_service.add_message(assistant_msg.id, full_response, paper_id, session.id, "assistant")
+        assistant_msg_id = await _save_msg("assistant", full_response, sources)
+        vector_service.add_message(assistant_msg_id, full_response, paper_id, session.id, "assistant")
 
         # Step 7: 发送 sources + done
         yield self._sse("sources", sources=sources)

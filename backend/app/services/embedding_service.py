@@ -5,6 +5,9 @@ Embedding 服务 —— 基于 sentence-transformers/all-MiniLM-L6-v2 的本地�
 模型下载到本地后，推理完全离线运行，数据不出本机。
 """
 
+import os as _os
+_os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 from pathlib import Path
 from app.core.config import settings
 

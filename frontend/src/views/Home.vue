@@ -35,7 +35,7 @@
           <PaperViewer class="viewer-pane" @close="papersStore.selectPaper(null)" />
 
           <!-- 右侧 1/3：对话框 -->
-          <ChatPanel class="chat-pane" />
+          <ChatPanel :key="papersStore.selectedPaperId" class="chat-pane" />
         </div>
       </template>
     </div>

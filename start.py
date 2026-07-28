@@ -7,12 +7,14 @@ ROOT = Path(__file__).parent
 
 def wait_for(url, timeout=60):
     start = time.time()
+    delay = 0.5          # 初始间隔 0.5 秒
     while time.time() - start < timeout:
         try:
             urlopen(Request(url), timeout=2)
             return True
         except Exception:
-            time.sleep(2)
+            time.sleep(min(delay, 2))   # 最大不超过 2 秒
+            delay *= 1.5                # 指数退避
     return False
 
 def kill_port(port):
@@ -37,7 +39,6 @@ def main():
     print("Cleaning up old processes...")
     kill_port(8000)
     kill_port(3000)
-    import time; time.sleep(1)
 
     backend = subprocess.Popen(
         f'cmd /c "cd /d {ROOT / "backend"} && venv\\Scripts\\activate && uvicorn app.main:app --port 8000"',

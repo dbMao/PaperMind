@@ -145,14 +145,7 @@ async def upload_paper(
             for s in parsed.sections
         ]
         paper.sections_json = sections_json
-
-        # 渲染页面图片 + 提取文字块坐标
-        try:
-            pages_data = parser_service.render_pages(str(pdf_path))
-            paper.pages_json = pages_data
-        except Exception as e:
-            logger.warning(f"页面渲染失败（非致命）: {e}")
-            paper.pages_json = []
+        paper.pages_json = []  # 占位，页面图片动态生成
 
         # Chunking + 向量化
         chunks = chunking_service.chunk_sections(

@@ -163,23 +163,45 @@ import katex from 'katex'
 // Markdown + LaTeX 渲染器
 function renderMarkdown(text) {
   if (!text) return ''
-  // 处理块级公式 $$...$$
-  let html = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
-    try { return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false }) }
-    catch { return `<pre>${math}</pre>` }
+
+  // Step 1: 用占位符保护所有公式内容，避免 marked 误解析 _ 和 \
+  const placeholders = []
+  let index = 0
+  const placeholderId = () => `%%MATH${index++}%%`
+
+  // 保护块级公式 $$...$$
+  text = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
+    const id = placeholderId()
+    placeholders.push({ id, html: katex.renderToString(math.trim(), { displayMode: true, throwOnError: false }) })
+    return id
   })
-  // 处理行内公式 $...$
-  html = html.replace(/\$([^\$]+?)\$/g, (_, math) => {
-    try { return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false }) }
-    catch { return `$${math}$` }
+
+  // 保护行内公式 $...$
+  text = text.replace(/\$(.+?)\$/g, (_, math) => {
+    const id = placeholderId()
+    try {
+      placeholders.push({ id, html: katex.renderToString(math.trim(), { displayMode: false, throwOnError: false }) })
+    } catch {
+      placeholders.push({ id, html: `$${math}$` })
+    }
+    return id
   })
-  // Markdown 渲染（marked 只负责文本排版）
+
+  // Step 2: marked 渲染（此时没有 $ 和 _ 干扰）
+  let html = text
   try {
-    const parsed = marked.parse(html, { breaks: true })
-    return typeof parsed === 'string' ? parsed : html
+    const parsed = marked.parse(text, { breaks: true })
+    html = typeof parsed === 'string' ? parsed : text
   } catch {
-    return html.replace(/\n/g, '<br>')
+    html = text.replace(/\n/g, '<br>')
   }
+
+  // Step 3: 还原公式占位符
+  for (const { id, html: mathHtml } of placeholders) {
+    html = html.replace(id, mathHtml)
+  }
+
+  return html
 }
 import { PRESETS, REASONING_LEVELS, getPresetsByMode } from '@/api/prompts'
 
