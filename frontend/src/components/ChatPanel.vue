@@ -157,48 +157,69 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { usePapersStore } from '@/stores/papers'
 import { useSettingsStore } from '@/stores/settings'
-import { marked } from 'marked'
+import MarkdownIt from 'markdown-it'
+import hljs from 'highlight.js'
 import katex from 'katex'
 
-// Markdown + LaTeX 渲染器
+// Markdown-it 实例
+const md = new MarkdownIt({
+  html: true,
+  breaks: true,
+  linkify: true,
+  highlight: function (str, lang) {
+    const langClass = lang ? ` class="lang-${hljs.getLanguage(lang) ? lang : ''}"` : ''
+    const codeId = 'code-' + Math.random().toString(36).slice(2, 8)
+    let highlighted
+    if (lang && hljs.getLanguage(lang)) {
+      try { highlighted = hljs.highlight(str, { language: lang, ignoreIllegals: true }).value }
+      catch { highlighted = md.utils.escapeHtml(str) }
+    } else {
+      highlighted = md.utils.escapeHtml(str)
+    }
+    const lines = str.split('\n').length
+    const foldable = lines > 20 ? ' foldable' : ''
+    return `
+      <div class="code-block${foldable}" data-lines="${lines}">
+        <div class="code-header">
+          <span class="code-lang">${lang || 'text'}</span>
+          <span class="code-actions">
+            <button class="code-fold-btn" onclick="this.closest('.code-block').classList.toggle('folded')">${lines > 20 ? '收起' : ''}</button>
+            <button class="code-copy-btn" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(str)}')).then(()=>{const t=this;t.textContent='✓';setTimeout(()=>t.textContent='复制',1500)})">复制</button>
+          </span>
+        </div>
+        <pre><code${langClass}>${highlighted}</code></pre>
+      </div>`
+  }
+})
+
+// 渲染器入口
 function renderMarkdown(text) {
   if (!text) return ''
 
-  // Step 1: 用占位符保护所有公式内容，避免 marked 误解析 _ 和 \
+  // Step 1: 占位符保护公式
   const placeholders = []
   let index = 0
-  const placeholderId = () => `%%MATH${index++}%%`
+  const pid = () => `%%M${index++}%%`
 
-  // 保护块级公式 $$...$$
   text = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
-    const id = placeholderId()
+    const id = pid()
     placeholders.push({ id, html: katex.renderToString(math.trim(), { displayMode: true, throwOnError: false }) })
     return id
   })
-
-  // 保护行内公式 $...$
   text = text.replace(/\$(.+?)\$/g, (_, math) => {
-    const id = placeholderId()
+    const id = pid()
     try {
       placeholders.push({ id, html: katex.renderToString(math.trim(), { displayMode: false, throwOnError: false }) })
-    } catch {
-      placeholders.push({ id, html: `$${math}$` })
-    }
+    } catch { placeholders.push({ id, html: `$${math}$` }) }
     return id
   })
 
-  // Step 2: marked 渲染（此时没有 $ 和 _ 干扰）
-  let html = text
-  try {
-    const parsed = marked.parse(text, { breaks: true })
-    html = typeof parsed === 'string' ? parsed : text
-  } catch {
-    html = text.replace(/\n/g, '<br>')
-  }
+  // Step 2: markdown-it 渲染（表格 + 代码高亮 + 链接）
+  let html = md.render(text)
 
-  // Step 3: 还原公式占位符
-  for (const { id, html: mathHtml } of placeholders) {
-    html = html.replace(id, mathHtml)
+  // Step 3: 还原公式
+  for (const { id, html: h } of placeholders) {
+    html = html.replace(id, h)
   }
 
   return html
@@ -683,4 +704,51 @@ onUnmounted(() => {
   0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
   40% { opacity: 1; transform: scale(1); }
 }
+
+/* ====== 代码块 ====== */
+.code-block { margin: 12px 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border); }
+.code-block.folded pre { max-height: 120px; overflow: hidden; }
+.code-block.folded .code-fold-btn::after { content: '展开'; }
+.code-block:not(.folded) .code-fold-btn::after { content: '收起'; }
+.code-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 12px; background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 12px;
+}
+.code-lang { color: var(--color-text-muted); text-transform: uppercase; font-size: 11px; font-weight: 600; }
+.code-actions { display: flex; gap: 6px; }
+.code-copy-btn, .code-fold-btn {
+  padding: 2px 8px; border-radius: 4px; border: 1px solid var(--color-border);
+  background: transparent; color: var(--color-text-muted); font-size: 11px; cursor: pointer;
+}
+.code-copy-btn:hover, .code-fold-btn:hover { background: var(--color-bg-hover); }
+.code-block pre { margin: 0; padding: 12px 16px; overflow-x: auto; background: #f6f8fa; }
+.code-block code { font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.5; }
+.dark .code-block pre { background: #1e1e1e; }
+.dark .code-block code { color: #d4d4d4; }
+.dark .hljs-keyword { color: #569cd6; }
+.dark .hljs-string { color: #ce9178; }
+.dark .hljs-number { color: #b5cea8; }
+.dark .hljs-function { color: #dcdcaa; }
+.dark .hljs-title { color: #dcdcaa; }
+
+/* ====== 表格 ====== */
+.message-text table {
+  border-collapse: collapse; margin: 12px 0; width: 100%;
+  font-size: 13px;
+}
+.message-text th, .message-text td {
+  border: 1px solid var(--color-border); padding: 8px 12px; text-align: left;
+}
+.message-text th {
+  background: var(--color-bg-secondary); font-weight: 600;
+}
+
+/* ====== 公式 ====== */
+.message-text .katex-display {
+  margin: 16px 0; overflow-x: auto; overflow-y: hidden;
+  font-size: 1.15em;
+}
+.message-text .katex { font-size: 1.05em; }
 </style>
