@@ -414,7 +414,7 @@ onUnmounted(() => {
 .messages-area {
   flex: 1;
   overflow-y: auto;
-  padding: 6px;
+  padding: 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -453,16 +453,18 @@ onUnmounted(() => {
 
 .message {
   display: flex;
+  margin-bottom: 20px;
 }
+.message:last-child { margin-bottom: 0; }
 .message.user { justify-content: flex-end; }
 .message.assistant { justify-content: flex-start; }
 
 .message-bubble {
   max-width: 100%;
-  padding: 10px 24px;
+  padding: 14px 28px;
   border-radius: var(--radius-md);
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.7;
 }
 
 .message.user .message-bubble {
@@ -476,6 +478,9 @@ onUnmounted(() => {
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-light);
   border-bottom-left-radius: 4px;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  line-height: 1.8;
 }
 
 .message-sources {
@@ -733,21 +738,83 @@ onUnmounted(() => {
 .dark .hljs-function { color: #dcdcaa; }
 .dark .hljs-title { color: #dcdcaa; }
 
-/* ====== 表格 ====== */
+/* ====== 消息正文排版 ====== */
+.message-text {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  color: #24292f;
+  line-height: 1.8;
+}
+.dark .message-text { color: #e6e6e6; }
+
+/* 段落 */
+.message-text p { margin: 1em 0 1.2em 0; line-height: 1.85; }
+
+/* 标题 */
+.message-text h1 {
+  font-size: 1.6em; font-weight: 700;
+  margin: 1.5em 0 0.6em 0;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #eaecef;
+}
+.message-text h2 { font-size: 1.35em; font-weight: 600; margin: 1.3em 0 0.5em 0; }
+.message-text h3 { font-size: 1.15em; font-weight: 500; margin: 1em 0 0.4em 0; }
+.message-text h1:first-child, .message-text h2:first-child, .message-text h3:first-child { margin-top: 0; }
+
+/* 表格 */
 .message-text table {
-  border-collapse: collapse; margin: 12px 0; width: 100%;
-  font-size: 13px;
+  border-collapse: collapse; margin: 1.5em 0; width: 100%;
+  font-size: 0.95em;
 }
 .message-text th, .message-text td {
-  border: 1px solid var(--color-border); padding: 8px 12px; text-align: left;
+  border: 1px solid #d0d7de; padding: 10px 14px; text-align: left;
 }
-.message-text th {
-  background: var(--color-bg-secondary); font-weight: 600;
+.message-text th { background: #f6f8fa; font-weight: 600;  }
+.message-text tbody tr:nth-child(even) { background: #fafbfc; }
+.dark .message-text th { background: #2d2d2d; border-color: #444; }
+.dark .message-text td { border-color: #444; }
+.dark .message-text tbody tr:nth-child(even) { background: #252525; }
+
+/* 分割线 */
+.message-text hr {
+  height: 1px; background: #d0d7de; border: none;
+  margin: 2em 0;
+}
+.dark .message-text hr { background: #444; }
+
+/* 列表 */
+.message-text ul, .message-text ol { padding-left: 2em; margin: 0.6em 0; }
+.message-text li { margin-bottom: 0.4em; }
+
+/* 链接 */
+.message-text a { color: #0969da; text-decoration: none; }
+.message-text a:hover { text-decoration: underline; }
+.dark .message-text a { color: #58a6ff; }
+
+/* 代码块（由 highlight.js 生成的样式） */
+.message-text pre {
+  background: #f6f8fa; border-radius: 6px;
+  padding: 16px; overflow-x: auto;
+  margin: 1em 0; line-height: 1.45;
+}
+.dark .message-text pre { background: #1e1e1e; }
+.message-text code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.9em;
+}
+
+/* 行内代码 */
+.message-text p code, .message-text li code {
+  background: rgba(175,184,193,0.2); padding: 2px 6px;
+  border-radius: 4px; font-size: 0.88em;
+}
+.dark .message-text p code, .dark .message-text li code {
+  background: rgba(110,118,129,0.3);
 }
 
 /* ====== 公式 ====== */
 .message-text .katex-display {
-  margin: 16px 0; overflow-x: auto; overflow-y: hidden;
+  margin: 1em 0; overflow-x: auto; overflow-y: hidden;
   font-size: 1.15em;
 }
 .message-text .katex { font-size: 1.05em; }

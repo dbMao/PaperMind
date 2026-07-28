@@ -96,6 +96,8 @@ function stopResize() {
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
 }
+
+
 </script>
 
 <style scoped>
@@ -158,7 +160,7 @@ function stopResize() {
 }
 
 .viewer-pane {
-  flex: 2;
+  flex: 1;
   min-width: 0;
 }
 
