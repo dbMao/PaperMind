@@ -168,6 +168,7 @@ onMounted(() => document.addEventListener('click', closePaperMenu))
 onUnmounted(() => document.removeEventListener('click', closePaperMenu))
 
 async function deletePaper(paper) {
+  if (!confirm(`确认删除论文「${paper.title}」吗？\n此操作将同时清除相关向量索引和聊天记录。`)) return
   paperMenuId.value = null
   await papers.removePaper(paper.id)
 }
@@ -194,6 +195,7 @@ async function confirmMove(folderId) {
 }
 
 async function handleDeleteFolder(f) {
+  if (!confirm(`确认删除组别「${f.name}」吗？\n组内的论文不会被删除，但将变为「未分组」。`)) return
   await papers.removeFolder(f.id)
 }
 
