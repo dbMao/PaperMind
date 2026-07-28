@@ -232,17 +232,7 @@ PaperMind/
 
 ---
 
-## 📜 许可
-
-[MIT License](LICENSE)
-
----
 
 ## 🙏 致谢
 
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [LangChain](https://python.langchain.com/)
 - [pdf2zh](https://github.com/Byaidu/PDFMathTranslate)
-- [KaTeX](https://katex.org/)
-- [markdown-it](https://github.com/markdown-it/markdown-it)
-- [highlight.js](https://highlightjs.org/)
